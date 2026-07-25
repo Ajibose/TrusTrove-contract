@@ -1161,12 +1161,49 @@ fn test_create_invoice_does_not_panic_on_xdr_generation() {
     let due_date = env.ledger().timestamp() + 86400;
 
     // Test with various face values to ensure no panic
-    let face_values = [1u128, 100, 1_000, 1_000_000, u128::MAX];
+    let face_values = [1u128, 100, 1_000, 1_000_000, crate::MAX_FACE_VALUE];
     for face_value in face_values.iter() {
         let invoice_id = client.create(&issuer, &buyer, face_value, &due_date, &usdc);
         let invoice = client.get(&invoice_id);
         assert_eq!(invoice.face_value, *face_value);
     }
+}
+
+#[test]
+fn test_create_allows_face_value_at_max_boundary() {
+    // Positive path: MAX_FACE_VALUE itself is allowed (boundary is inclusive).
+    let (env, client, issuer, buyer, _, usdc) = setup();
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.create(&issuer, &buyer, &crate::MAX_FACE_VALUE, &due_date, &usdc);
+    let invoice = client.get(&invoice_id);
+    assert_eq!(invoice.face_value, crate::MAX_FACE_VALUE);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")]
+fn test_create_fails_face_value_above_max_boundary() {
+    // Negative path: one stroop above MAX_FACE_VALUE must panic with InvalidAmount (#16).
+    let (env, client, issuer, buyer, _, usdc) = setup();
+    let due_date = env.ledger().timestamp() + 86400;
+
+    client.create(
+        &issuer,
+        &buyer,
+        &(crate::MAX_FACE_VALUE + 1),
+        &due_date,
+        &usdc,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")]
+fn test_create_fails_face_value_u128_max() {
+    // u128::MAX must be rejected as InvalidAmount rather than overflowing downstream math.
+    let (env, client, issuer, buyer, _, usdc) = setup();
+    let due_date = env.ledger().timestamp() + 86400;
+
+    client.create(&issuer, &buyer, &u128::MAX, &due_date, &usdc);
 }
 
 #[test]
